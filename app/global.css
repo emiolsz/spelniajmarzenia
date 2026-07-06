@@ -1,8 +1,12 @@
 :root {
   --blue: #06236b;
+  --blue-dark: #031747;
   --coral: #ff6f6f;
-  --light: #f7fbff;
+  --coral-dark: #f45b5b;
+  --white: #ffffff;
+  --soft: #f3f9ff;
   --text: #10204a;
+  --shadow: rgba(3, 23, 71, 0.18);
 }
 
 * {
@@ -17,129 +21,333 @@ body {
   margin: 0;
   font-family: Arial, sans-serif;
   color: var(--text);
-  background: white;
+  background: var(--white);
 }
+
+main {
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+/* ===========================
+   NAWIGACJA
+=========================== */
+
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 82px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 50px;
+
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+
+  z-index: 1000;
+
+  transition: all .35s ease;
+}
+
+.navLogo {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--blue);
+  letter-spacing: .5px;
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 34px;
+}
+
+.navLinks a {
+  position: relative;
+  color: var(--blue);
+  font-size: 1rem;
+  font-weight: 600;
+  transition: color .3s ease;
+}
+
+.navLinks a::after {
+  content: "";
+
+  position: absolute;
+  left: 0;
+  bottom: -6px;
+
+  width: 0;
+  height: 2px;
+
+  background: var(--coral);
+
+  transition: .35s;
+}
+
+.navLinks a:hover::after {
+  width: 100%;
+}
+
+.navLinks a:hover {
+  color: var(--coral);
+}
+
+.navButton {
+  background: var(--coral);
+
+  color: white;
+
+  padding: 14px 28px;
+
+  border-radius: 999px;
+
+  font-weight: 700;
+
+  transition: .3s;
+}
+
+.navButton:hover {
+  background: var(--coral-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(255,111,111,.35);
+}
+/* ===========================
+   HERO
+=========================== */
 
 .hero {
   position: relative;
   width: 100%;
   min-height: 100vh;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
   overflow: hidden;
 }
 
 .heroImage {
   object-fit: cover;
   object-position: center;
+  z-index: 1;
+
+  animation: heroZoom 18s ease-in-out infinite alternate;
 }
 
-.section {
-  padding: 90px 24px;
-  max-width: 1100px;
-  margin: 0 auto;
+/* delikatne rozjaśnienie zdjęcia */
+
+.hero::after {
+  content: "";
+
+  position: absolute;
+  inset: 0;
+
+  background:
+    linear-gradient(
+      rgba(255,255,255,.15),
+      rgba(255,255,255,.05)
+    );
+
+  z-index: 2;
+}
+
+/* ===========================
+   MGŁA
+=========================== */
+
+.mist {
+  position: absolute;
+  inset: -25%;
+
+  z-index: 3;
+
+  pointer-events: none;
+
+  filter: blur(70px);
+}
+
+.mistOne {
+
+  background:
+  radial-gradient(circle at 20% 40%,
+  rgba(255,255,255,.95),
+  transparent 42%),
+
+  radial-gradient(circle at 80% 30%,
+  rgba(255,255,255,.90),
+  transparent 36%),
+
+  radial-gradient(circle at 60% 80%,
+  rgba(255,255,255,.80),
+  transparent 42%);
+
+  animation:
+    mistMoveOne 10s ease forwards;
+}
+
+.mistTwo {
+
+  background:
+  radial-gradient(circle at 40% 30%,
+  rgba(255,255,255,.90),
+  transparent 34%),
+
+  radial-gradient(circle at 75% 70%,
+  rgba(255,255,255,.75),
+  transparent 38%);
+
+  animation:
+    mistMoveTwo 12s ease forwards;
+}
+
+.mistThree {
+
+  background:
+  radial-gradient(circle at 50% 50%,
+  rgba(255,255,255,.65),
+  transparent 50%);
+
+  animation:
+    mistMoveThree 14s ease forwards;
+}
+
+/* ===========================
+   ZAWARTOŚĆ HERO
+=========================== */
+
+.heroContent {
+
+  position: relative;
+
+  z-index: 5;
+
+  max-width: 1000px;
+
   text-align: center;
+
+  padding: 140px 30px 80px;
+
+  opacity: 0;
+
+  animation:
+    heroContentAppear 2.4s ease forwards;
+
+  animation-delay: 2.2s;
 }
 
-.section h2 {
-  font-size: 42px;
+.heroLogo {
+
+  margin-bottom: 30px;
+
+  opacity: 0;
+
+  transform: scale(.8);
+
+  animation:
+    logoReveal 1.6s ease forwards;
+
+  animation-delay: 2.8s;
+}
+
+.hero h1 {
+
+  font-size: clamp(42px,6vw,76px);
+
   color: var(--blue);
-  margin-bottom: 20px;
+
+  margin-bottom: 14px;
+
+  letter-spacing: 1px;
 }
 
-.section p {
-  font-size: 20px;
-  line-height: 1.6;
-}
+.heroSubtitle {
 
-.cardGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 22px;
-  margin-top: 40px;
-}
+  font-size: clamp(22px,2vw,30px);
 
-.cardGrid article {
-  padding: 32px;
-  border-radius: 24px;
-  background: var(--light);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
-}
+  color: var(--blue-dark);
 
-.cardGrid h3 {
-  color: var(--blue);
-  font-size: 26px;
-}
+  margin-bottom: 60px;
 
-.facebook {
-  background: linear-gradient(180deg, #ffffff, #eef7ff);
-  border-radius: 40px;
+  font-style: italic;
 }
+/* ===========================
+   ANIMACJE HERO
+=========================== */
 
-.button,
-form button {
-  display: inline-block;
-  border: none;
-  border-radius: 999px;
-  background: var(--coral);
-  color: white;
-  padding: 16px 34px;
-  font-weight: 700;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-form {
-  max-width: 600px;
-  margin: 40px auto 0;
-  display: grid;
-  gap: 16px;
-}
-
-input,
-textarea {
-  width: 100%;
-  padding: 16px 18px;
-  border-radius: 18px;
-  border: 1px solid #cfd8ea;
-  font-size: 16px;
-}
-
-textarea {
-  min-height: 160px;
-  resize: vertical;
-}
-
-.rodo {
-  display: flex;
-  gap: 10px;
-  text-align: left;
-  font-size: 14px;
-}
-
-.rodo input {
-  width: auto;
-}
-
-footer {
-  padding: 32px 20px;
-  text-align: center;
-  color: white;
-  background: var(--blue);
-}
-
-@media (max-width: 800px) {
-  .hero {
-    min-height: 70vh;
+@keyframes heroZoom {
+  from {
+    transform: scale(1);
   }
 
-  .section {
-    padding: 64px 20px;
+  to {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes mistMoveOne {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateX(0);
   }
 
-  .section h2 {
-    font-size: 32px;
+  70% {
+    opacity: .55;
   }
 
-  .cardGrid {
-    grid-template-columns: 1fr;
+  100% {
+    opacity: 0;
+    transform: scale(1.35) translateX(-18%);
+  }
+}
+
+@keyframes mistMoveTwo {
+  0% {
+    opacity: 1;
+    transform: scale(1.1) translateX(0);
+  }
+
+  75% {
+    opacity: .45;
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.4) translateX(20%);
+  }
+}
+
+@keyframes mistMoveThree {
+  0% {
+    opacity: .85;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+}
+
+@keyframes heroContentAppear {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes logoReveal {
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
