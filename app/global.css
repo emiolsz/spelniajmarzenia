@@ -861,3 +861,14 @@ footer {
     padding: 30px;
   }
 }
+.authorLink {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: .3s ease;
+}
+
+.authorLink:hover {
+  color: var(--coral);
+  text-shadow: 0 0 18px rgba(255, 255, 255, .55);
+}
