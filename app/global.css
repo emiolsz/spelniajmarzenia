@@ -351,3 +351,513 @@ a {
     transform: scale(1);
   }
 }
+/* ===========================
+   WARTOŚCI HERO
+=========================== */
+
+.heroValues {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+
+  max-width: 1100px;
+
+  margin: 0 auto 60px;
+}
+
+.heroValues div {
+
+  background: rgba(255,255,255,.22);
+
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+
+  border: 1px solid rgba(255,255,255,.35);
+
+  border-radius: 24px;
+
+  padding: 28px;
+
+  transition: .35s ease;
+}
+
+.heroValues div:hover {
+
+  transform: translateY(-8px);
+
+  background: rgba(255,255,255,.35);
+
+  box-shadow: 0 18px 40px rgba(0,0,0,.12);
+}
+
+.heroValues span {
+
+  display: block;
+
+  font-size: 42px;
+
+  margin-bottom: 16px;
+}
+
+.heroValues strong {
+
+  display: block;
+
+  color: var(--blue);
+
+  font-size: 1.3rem;
+
+  margin-bottom: 12px;
+}
+
+.heroValues p {
+
+  margin: 0;
+
+  line-height: 1.7;
+
+  color: var(--text);
+}
+
+/* ===========================
+   PRZYCISK HERO
+=========================== */
+
+.heroButton {
+
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  padding: 18px 42px;
+
+  border-radius: 999px;
+
+  background: linear-gradient(
+    135deg,
+    var(--coral),
+    #ff8f8f
+  );
+
+  color: white;
+
+  font-size: 1rem;
+
+  font-weight: 700;
+
+  letter-spacing: .5px;
+
+  transition: .35s ease;
+}
+
+.heroButton:hover {
+
+  transform: translateY(-4px);
+
+  box-shadow:
+  0 18px 36px rgba(255,111,111,.35);
+}
+/* ===========================
+   SEKCJE
+=========================== */
+
+.section {
+
+  max-width: 1200px;
+
+  margin: 0 auto;
+
+  padding: 110px 30px;
+}
+
+.section h2 {
+
+  text-align: center;
+
+  font-size: clamp(34px,4vw,54px);
+
+  color: var(--blue);
+
+  margin-bottom: 25px;
+}
+
+.section p {
+
+  max-width: 760px;
+
+  margin: auto;
+
+  text-align: center;
+
+  line-height: 1.8;
+
+  font-size: 18px;
+}
+
+/* ===========================
+   KARTY
+=========================== */
+
+.cards {
+
+  display: grid;
+
+  grid-template-columns: repeat(3,1fr);
+
+  gap: 28px;
+
+  margin-top: 70px;
+}
+
+.cards article {
+
+  padding: 40px;
+
+  border-radius: 30px;
+
+  background: white;
+
+  box-shadow:
+      0 18px 45px rgba(0,0,0,.08);
+
+  transition: .35s;
+}
+
+.cards article:hover {
+
+  transform: translateY(-10px);
+
+  box-shadow:
+      0 28px 55px rgba(0,0,0,.12);
+}
+
+.cards h3 {
+
+  color: var(--blue);
+
+  margin-bottom: 18px;
+}
+
+.cards p {
+
+  text-align: left;
+}
+
+/* ===========================
+   FACEBOOK
+=========================== */
+
+.facebook {
+
+  background: linear-gradient(
+      180deg,
+      #f7fbff,
+      white);
+
+  border-radius: 40px;
+}
+
+.button {
+
+  display: inline-flex;
+
+  margin-top: 40px;
+
+  padding: 18px 36px;
+
+  border-radius: 999px;
+
+  background: var(--blue);
+
+  color: white;
+
+  transition: .3s;
+}
+
+.button:hover {
+
+  background: var(--blue-dark);
+
+  transform: translateY(-3px);
+}
+/* ===========================
+   SEKCJE
+=========================== */
+
+.section {
+
+  max-width: 1200px;
+
+  margin: 0 auto;
+
+  padding: 110px 30px;
+}
+
+.section h2 {
+
+  text-align: center;
+
+  font-size: clamp(34px,4vw,54px);
+
+  color: var(--blue);
+
+  margin-bottom: 25px;
+}
+
+.section p {
+
+  max-width: 760px;
+
+  margin: auto;
+
+  text-align: center;
+
+  line-height: 1.8;
+
+  font-size: 18px;
+}
+
+/* ===========================
+   KARTY
+=========================== */
+
+.cards {
+
+  display: grid;
+
+  grid-template-columns: repeat(3,1fr);
+
+  gap: 28px;
+
+  margin-top: 70px;
+}
+
+.cards article {
+
+  padding: 40px;
+
+  border-radius: 30px;
+
+  background: white;
+
+  box-shadow:
+      0 18px 45px rgba(0,0,0,.08);
+
+  transition: .35s;
+}
+
+.cards article:hover {
+
+  transform: translateY(-10px);
+
+  box-shadow:
+      0 28px 55px rgba(0,0,0,.12);
+}
+
+.cards h3 {
+
+  color: var(--blue);
+
+  margin-bottom: 18px;
+}
+
+.cards p {
+
+  text-align: left;
+}
+
+/* ===========================
+   FACEBOOK
+=========================== */
+
+.facebook {
+
+  background: linear-gradient(
+      180deg,
+      #f7fbff,
+      white);
+
+  border-radius: 40px;
+}
+
+.button {
+
+  display: inline-flex;
+
+  margin-top: 40px;
+
+  padding: 18px 36px;
+
+  border-radius: 999px;
+
+  background: var(--blue);
+
+  color: white;
+
+  transition: .3s;
+}
+
+.button:hover {
+
+  background: var(--blue-dark);
+
+  transform: translateY(-3px);
+}
+/* ===========================
+   FORMULARZ KONTAKTOWY
+=========================== */
+
+.contact form {
+  max-width: 650px;
+  margin: 50px auto 0;
+
+  display: grid;
+  gap: 18px;
+}
+
+.contact input,
+.contact textarea {
+  width: 100%;
+
+  padding: 18px 22px;
+
+  border: 1px solid rgba(6, 35, 107, 0.18);
+  border-radius: 22px;
+
+  font-size: 16px;
+  font-family: inherit;
+
+  background: #ffffff;
+}
+
+.contact textarea {
+  min-height: 170px;
+  resize: vertical;
+}
+
+.contact label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.contact label input {
+  width: auto;
+  margin-top: 4px;
+}
+
+.contact button {
+  justify-self: center;
+
+  border: none;
+  border-radius: 999px;
+
+  padding: 18px 42px;
+
+  background: var(--coral);
+  color: white;
+
+  font-weight: 700;
+  font-size: 16px;
+
+  cursor: pointer;
+
+  transition: .3s;
+}
+
+.contact button:hover {
+  background: var(--coral-dark);
+  transform: translateY(-3px);
+}
+
+/* ===========================
+   STOPKA
+=========================== */
+
+footer {
+  padding: 36px 20px;
+
+  text-align: center;
+
+  color: white;
+  background: var(--blue);
+}
+
+/* ===========================
+   RESPONSYWNOŚĆ
+=========================== */
+
+@media (max-width: 900px) {
+  .navbar {
+    height: auto;
+    padding: 18px 22px;
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+
+  .navLinks {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 18px;
+  }
+
+  .navButton {
+    padding: 12px 22px;
+  }
+
+  .heroContent {
+    padding-top: 170px;
+  }
+
+  .heroValues {
+    grid-template-columns: 1fr;
+    max-width: 420px;
+  }
+
+  .cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .navLogo {
+    font-size: 1.1rem;
+  }
+
+  .navLinks a {
+    font-size: .9rem;
+  }
+
+  .heroContent {
+    padding: 160px 18px 70px;
+  }
+
+  .heroLogo {
+    width: 120px;
+    height: 120px;
+  }
+
+  .hero h1 {
+    font-size: 38px;
+  }
+
+  .heroSubtitle {
+    font-size: 21px;
+    margin-bottom: 38px;
+  }
+
+  .section {
+    padding: 78px 22px;
+  }
+
+  .cards article {
+    padding: 30px;
+  }
+}
