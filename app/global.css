@@ -1,0 +1,145 @@
+:root {
+  --blue: #06236b;
+  --coral: #ff6f6f;
+  --light: #f7fbff;
+  --text: #10204a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  color: var(--text);
+  background: white;
+}
+
+.hero {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.heroImage {
+  object-fit: cover;
+  object-position: center;
+}
+
+.section {
+  padding: 90px 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.section h2 {
+  font-size: 42px;
+  color: var(--blue);
+  margin-bottom: 20px;
+}
+
+.section p {
+  font-size: 20px;
+  line-height: 1.6;
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+  margin-top: 40px;
+}
+
+.cardGrid article {
+  padding: 32px;
+  border-radius: 24px;
+  background: var(--light);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+}
+
+.cardGrid h3 {
+  color: var(--blue);
+  font-size: 26px;
+}
+
+.facebook {
+  background: linear-gradient(180deg, #ffffff, #eef7ff);
+  border-radius: 40px;
+}
+
+.button,
+form button {
+  display: inline-block;
+  border: none;
+  border-radius: 999px;
+  background: var(--coral);
+  color: white;
+  padding: 16px 34px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+form {
+  max-width: 600px;
+  margin: 40px auto 0;
+  display: grid;
+  gap: 16px;
+}
+
+input,
+textarea {
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid #cfd8ea;
+  font-size: 16px;
+}
+
+textarea {
+  min-height: 160px;
+  resize: vertical;
+}
+
+.rodo {
+  display: flex;
+  gap: 10px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.rodo input {
+  width: auto;
+}
+
+footer {
+  padding: 32px 20px;
+  text-align: center;
+  color: white;
+  background: var(--blue);
+}
+
+@media (max-width: 800px) {
+  .hero {
+    min-height: 70vh;
+  }
+
+  .section {
+    padding: 64px 20px;
+  }
+
+  .section h2 {
+    font-size: 32px;
+  }
+
+  .cardGrid {
+    grid-template-columns: 1fr;
+  }
+}
