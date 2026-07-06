@@ -136,10 +136,25 @@ export default function HomePage() {
           <button type="submit">Wyślij wiadomość</button>
         </form>
       </section>
+<footer>
+  <p>© 2026</p>
 
-      <footer>
-        © Stowarzyszenie Spełniaj Marzenia
-      </footer>
+  <p>
+    <a
+      href="https://www.grzadkowisko.pl/"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="authorLink"
+    >
+      Emilia Olszewska
+    </a>
+  </p>
+
+  <p>
+    Projekt i wykonanie strony internetowej dla<br />
+    Stowarzyszenia Spełniaj Marzenia
+  </p>
+</footer>
     </main>
   );
 }
