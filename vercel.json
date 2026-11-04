@@ -1,0 +1,1 @@
+{"framework":null,"outputDirectory":"public","rewrites":[{"source":"/api/dzialania","destination":"/api/marzenia?route=dzialania"},{"source":"/api/dzialania/:id","destination":"/api/marzenia?route=dzialania&id=:id"},{"source":"/api/admin/:operation","destination":"/api/marzenia?route=admin&operation=:operation"}]}
