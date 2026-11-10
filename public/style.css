@@ -87,3 +87,5 @@ footer .facebook-button{margin-top:.55rem}
 #action-preview summary{cursor:pointer;font-weight:750;color:var(--accent)}
 
 .admin-article-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.2rem 0;border-bottom:1px solid #d5dce2}.admin-article-row p{margin:.3rem 0 0}.admin-article-row .btn{flex-shrink:0}#article-manager{margin:1.5rem 0}#article-list{margin-top:1rem}#editor-title{overflow-wrap:anywhere}@media(max-width:600px){.admin-article-row{align-items:flex-start;flex-direction:column}}
+
+.admin-article-buttons{display:flex;flex-wrap:wrap;gap:.6rem}.delete-article{background:#a52c35;color:#fff}.delete-article:hover{background:#80212a}

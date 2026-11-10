@@ -141,9 +141,26 @@ if (actionForm) {
         info.append(title,meta);
         const edit=document.createElement('button'); edit.type='button'; edit.className='btn'; edit.textContent='Edytuj';
         edit.addEventListener('click',()=>{if(canLeave()){openEditor(article); actionForm.scrollIntoView({behavior:'smooth',block:'start'}); actionForm.elements.title.focus({preventScroll:true});}});
-        row.append(info,edit); list.append(row);
+        edit.hidden=Boolean(article.deleted);
+        const remove=document.createElement('button'); remove.type='button'; remove.className='btn delete-article';
+        remove.textContent=article.deleted ? 'Ponów usuwanie zdjęć' : 'Usuń wpis';
+        remove.addEventListener('click',async()=>{
+          if(!canLeave()) return;
+          if(!article.deleted && !confirm('Usunąć wpis „'+article.title+'” razem z treścią i zdjęciami? Tej operacji nie można cofnąć.')) return;
+          busy=true; manager.inert=true; actionForm.inert=true; logout.disabled=true;
+          listStatus.textContent=article.deleted ? 'Usuwanie zdjęć…' : 'Usuwanie wpisu…';
+          try {
+            const result=await adminPost('/api/admin/usun',{id:article.id,revision:article.revision});
+            if(editing?.id===article.id) openEditor();
+            await refreshArticles();
+            listStatus.textContent=result.cleanupPending ? 'Wpis został usunięty ze strony. Nie udało się jeszcze usunąć plików zdjęć — kliknij „Ponów usuwanie zdjęć”.' : 'Wpis został usunięty razem z treścią i zdjęciami. Możesz dodać nowy artykuł.';
+          } catch(error) {listStatus.textContent=error.message;}
+          finally {busy=false;manager.inert=false;actionForm.inert=false;logout.disabled=false;}
+        });
+        const buttons=document.createElement('div'); buttons.className='admin-article-buttons'; buttons.append(edit,remove);
+        row.append(info,buttons); list.append(row);
       }
-      listStatus.textContent='Liczba artykułów: '+articles.length;
+      listStatus.textContent='Liczba artykułów: '+articles.filter(a=>!a.deleted).length;
     } catch(error) {listStatus.textContent=error.message;}
   }
   document.addEventListener('admin-ready',refreshArticles);
@@ -352,8 +369,9 @@ async function loadActions() {
     if (!list.ok) throw new Error();
     const entries = await list.json();
     if (!entries.length) return;
+    for(const entry of entries.filter(entry=>entry.deleted)) document.querySelector('[data-article-id="'+entry.id+'"]')?.remove();
     const dated = [...document.querySelectorAll('[data-date]')];
-    const updates=await Promise.all(entries.filter(entry=>!entry.builtin).map(async entry=>{
+    const updates=await Promise.all(entries.filter(entry=>!entry.builtin && !entry.deleted).map(async entry=>{
       const url='/api/dzialania/'+entry.id;
       const response=await fetch(url);
       if(!response.ok) throw new Error();

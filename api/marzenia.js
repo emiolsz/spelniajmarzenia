@@ -59,6 +59,8 @@ async function upload(request) {
   return json({path},201);
 }
 const localPhotos = new Set(builtinActions.flatMap(a => a.photos.map(p => p.path)));
+// Empty title and body mark a removed article, preventing legacy content from reappearing.
+const isDeleted = article => article.title === '' && article.body === '';
 const storedDate = date => date || '0001-01-01';
 const visibleDate = date => date === '0001-01-01' ? '' : date;
 function revision(article) {
@@ -78,7 +80,7 @@ async function allArticles() {
     const page=await next.json(); rows.push(...page); if(page.length<1000) break;
   }
   const ids = new Set(rows.map(a=>a.id));
-  return [...rows.map(a=>({...a,revision:revision(a)})), ...builtinActions.filter(a=>!ids.has(a.id)).map(a=>({...a,builtin:true,revision:'builtin'}))]
+  return [...rows.map(a=>({...a,deleted:isDeleted(a),revision:revision(a)})), ...builtinActions.filter(a=>!ids.has(a.id)).map(a=>({...a,builtin:true,revision:'builtin'}))]
     .sort((a,b)=>visibleDate(b.date).localeCompare(visibleDate(a.date)) || a.id.localeCompare(b.id));
 }
 async function publish(request, editing=false) {
@@ -96,6 +98,7 @@ async function publish(request, editing=false) {
     if(!read.ok) throw new Error('read');
     const [current]=await read.json();
     if(current) {
+      if(isDeleted(current)) return json({error:'Ten wpis został usunięty. Odśwież listę.'},404);
       if(data.revision!==revision(current)) return json({error:'Ten wpis został już zmieniony. Otwórz go ponownie z listy.'},409);
       const filters=new URLSearchParams({id:'eq.'+data.id,select:'id',title:'eq.'+current.title,body:'eq.'+current.body,date:'eq.'+current.date,photos:'eq.'+JSON.stringify(current.photos)});
       query='?'+filters;
@@ -113,6 +116,44 @@ async function publish(request, editing=false) {
   if(!saved.length) return json({error:'Ten wpis został już zmieniony. Otwórz go ponownie z listy.'},409);
   return json({ok:true},editing?200:201);
 }
+async function removeArticle(request) {
+  const data=await request.json();
+  if(typeof data.id!=='string' || !new RegExp('^'+uuid+'$').test(data.id)) return json({error:'Nieprawidłowy wpis.'},400);
+  const read=await upstream('/rest/v1/marzenia_articles?select=*&id=eq.'+data.id,service());
+  if(!read.ok) throw new Error('read');
+  const [current]=await read.json();
+  const builtin=builtinActions.find(a=>a.id===data.id);
+  if(!current && !builtin) return json({ok:true});
+  const article={...(current || builtin)};
+  if(!isDeleted(article)) {
+    if(data.revision!==(current ? revision(current) : 'builtin')) return json({error:'Wpis zmienił się od otwarcia listy. Odśwież listę przed usunięciem.'},409);
+    // First remove the text and hide the article. Keep only pending file paths for retryable cleanup.
+    const tombstone={title:'',body:'',date:storedDate(''),photos:article.photos.filter(p=>photoPath.test(p.path)).map(p=>({path:p.path,alt:''}))};
+    let query='', options;
+    if(current) {
+      query='?'+new URLSearchParams({id:'eq.'+data.id,select:'id',title:'eq.'+current.title,body:'eq.'+current.body,date:'eq.'+current.date,photos:'eq.'+JSON.stringify(current.photos)});
+      options={...post(tombstone),method:'PATCH'};
+    } else options=post({...tombstone,id:data.id});
+    options.headers.Prefer='return=representation';
+    const removed=await upstream('/rest/v1/marzenia_articles'+query,service(),options);
+    if(removed.status===409) return json({error:'Wpis zmienił się. Odśwież listę przed usunięciem.'},409);
+    if(!removed.ok) return json({error:'Nie udało się usunąć wpisu. Spróbuj ponownie.'},502);
+    if(!(await removed.json()).length) return json({error:'Wpis zmienił się. Odśwież listę przed usunięciem.'},409);
+    article.photos=tombstone.photos;
+  }
+  if(!article.photos.length) return json({ok:true});
+  try {
+    // A photo used by another published article must stay available for that article.
+    const referenced=new Set((await allArticles()).filter(a=>!isDeleted(a)).flatMap(a=>a.photos.map(p=>p.path)));
+    const paths=[...new Set(article.photos.map(p=>p.path).filter(path=>photoPath.test(path) && !referenced.has(path)))];
+    if(paths.length) {
+      const files=await upstream('/storage/v1/object/'+bucket,service(),{...post({prefixes:paths}),method:'DELETE'});
+      if(!files.ok) return json({ok:true,cleanupPending:true});
+    }
+    const cleared=await upstream('/rest/v1/marzenia_articles?id=eq.'+data.id,service(),{...post({photos:[]}),method:'PATCH'});
+    return json({ok:true,...(!cleared.ok ? {cleanupPending:true} : {})});
+  } catch {return json({ok:true,cleanupPending:true});}
+}
 export default {async fetch(request) {
   const url = new URL(request.url);
   const route = url.searchParams.get('route');
@@ -127,17 +168,17 @@ export default {async fetch(request) {
     if (request.method==='GET' && path==='/api/admin/sesja') return json({authorized:await authorized(request)});
     if(request.method==='GET' && path==='/api/admin/artykuly') {
       if(!await authorized(request)) return json({error:'Zaloguj się jako administrator.'},403);
-      return json((await allArticles()).map(withPhotos));
+      return json((await allArticles()).filter(a=>!a.deleted || a.photos.length).map(a=>a.deleted ? {id:a.id,deleted:true,revision:a.revision,title:'Usunięty wpis — dokończ usuwanie zdjęć',date:'',photos:[]} : withPhotos(a)));
     }
     if (request.method==='GET' && path.startsWith('/api/dzialania')) {
       const match=path.match(new RegExp('^/api/dzialania/('+uuid+')$'));
       if(!match && path!=='/api/dzialania') return json(null,404);
-      if(!match) return json((await allArticles()).map(a=>({id:a.id,date:visibleDate(a.date),builtin:Boolean(a.builtin)})));
+      if(!match) return json((await allArticles()).map(a=>(a.deleted ? {id:a.id,deleted:true} : {id:a.id,date:visibleDate(a.date),builtin:Boolean(a.builtin)})));
       const response=await upstream('/rest/v1/marzenia_articles?select=*&id=eq.'+match[1],service());
       if(!response.ok) throw new Error('read');
       const rows=await response.json();
       const article=rows[0] || builtinActions.find(a=>a.id===match[1]);
-      return article ? json(withPhotos(article)) : json(null,404);
+      return article && !isDeleted(article) ? json(withPhotos(article)) : json(null,404);
     }
     if (request.method!=='POST') return json(null,405);
     if (request.headers.get('origin')!==url.origin) return json({error:'Nieprawidłowe źródło żądania.'},403);
@@ -145,6 +186,7 @@ export default {async fetch(request) {
     if (!await authorized(request)) return json({error:'Zaloguj się jako administrator.'},403);
     if (path==='/api/admin/zdjecie') return await upload(request);
     if (path==='/api/admin/wyloguj') return json({ok:true},200,{'Set-Cookie':sessionName+'=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'});
+    if (path==='/api/admin/usun') return await removeArticle(request);
     if (path==='/api/admin/edycja') return await publish(request,true);
     if (path==='/api/dzialania') return await publish(request);
     return json(null,404);
