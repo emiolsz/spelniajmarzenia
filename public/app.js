@@ -25,10 +25,27 @@ refresh();
 }
 const topic = document.querySelector('#topic');
 document.querySelector('#partner')?.addEventListener('click', () => { topic.value = 'Współpraca dla firm'; });
+function applyContactTopic() {
+  if (!topic) return;
+  if (location.hash === '#pomoc') topic.value = 'Szukam pomocy';
+  if (location.hash === '#wspolpraca') topic.value = 'Współpraca dla firm';
+}
+applyContactTopic();
+window.addEventListener('hashchange', applyContactTopic);
 document.querySelector('#help')?.addEventListener('click', () => { topic.value = 'Szukam pomocy'; });
 document.querySelector('#contact')?.addEventListener('submit', event => {
   event.preventDefault();
-  document.querySelector('#contact-result').textContent = 'Formularz testowy jest poprawny. Wiadomość nie została wysłana.';
+  const form = event.currentTarget;
+  const message = form.elements.message.value.trim();
+  const output = document.querySelector('#contact-result');
+  if (!message) {output.textContent='Wpisz treść wiadomości.'; form.elements.message.focus(); return;}
+  const address='stowarzyszeniemarzenia@gmail.com';
+  const subject='Stowarzyszenie Marzenia — '+topic.value;
+  const body=message+'\r\n\r\nE-mail do odpowiedzi: '+form.elements.email.value.trim();
+  const href='mailto:'+address+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  const link=document.createElement('a');link.href=href;link.textContent='Otwórz wiadomość w programie pocztowym';
+  output.replaceChildren(document.createTextNode('Wiadomość nie została jeszcze wysłana. Wyślij ją w programie pocztowym. Jeśli nie otworzył się automatycznie, '),link,document.createTextNode(' lub napisz bezpośrednio na '+address+'.'));
+  link.click();
 });
 
 document.querySelector('#business-form')?.addEventListener('submit', event => {
