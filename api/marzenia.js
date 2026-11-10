@@ -174,18 +174,26 @@ async function readFacebook() {
   const response=await upstream('/rest/v1/marzenia_articles?select=body&id=eq.'+settingsId,service());
   if(!response.ok) throw new Error('settings');
   const [row]=await response.json();
-  if(!row) return json({url:defaultFacebook});
+  if(!row) return json({url:defaultFacebook,domain:''});
   const settings=JSON.parse(row.body);
-  return json({url:facebookUrl(settings.facebookUrl) || defaultFacebook});
+  return json({url:facebookUrl(settings.facebookUrl) || defaultFacebook,domain:settings.domain || ''});
 }
 async function saveFacebook(request) {
   const data=await request.json();
   const url=facebookUrl(data?.url);
   if(!url) return json({error:'Wklej pełny adres strony Facebook, zaczynający się od https://www.facebook.com/.'},400);
-  const options=post({id:settingsId,title:'Ustawienia strony',body:JSON.stringify({facebookUrl:url}),date:storedDate(''),photos:[]});
+  let domain='';
+  if(typeof data.domain==='string' && data.domain.trim()) {
+    try {
+      const parsed=new URL('https://'+data.domain.trim().replace(/^https?:\/\//i,'').replace(/\/$/,''));
+      domain=parsed.hostname.toLowerCase();
+      if(parsed.username || parsed.password || parsed.port || parsed.pathname!=='/' || parsed.search || parsed.hash || domain.length>253 || !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)) throw new Error('domain');
+    } catch {return json({error:'Wpisz poprawną domenę, np. stowarzyszeniemarzenia.pl, bez ścieżki do podstrony.'},400);}
+  }
+  const options=post({id:settingsId,title:'Ustawienia strony',body:JSON.stringify({facebookUrl:url,domain}),date:storedDate(''),photos:[]});
   options.headers.Prefer='resolution=merge-duplicates';
   const response=await upstream('/rest/v1/marzenia_articles?on_conflict=id',service(),options);
-  return response.ok ? json({ok:true,url}) : json({error:'Nie udało się zapisać adresu. Spróbuj ponownie.'},502);
+  return response.ok ? json({ok:true,url,domain}) : json({error:'Nie udało się zapisać adresów. Spróbuj ponownie.'},502);
 }
 export default {async fetch(request) {
   const url = new URL(request.url);

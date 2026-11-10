@@ -143,6 +143,7 @@ fetch('/api/admin/facebook').then(async response=>{
   applyFacebook(data.url);
   if(facebookSettings) {
     facebookSettings.elements.facebookUrl.value=data.url;
+    facebookSettings.elements.domain.value=data.domain || '';
     facebookSettings.querySelector('button').disabled=false;
   }
 }).catch(()=>{
@@ -152,14 +153,15 @@ facebookSettings?.addEventListener('submit',async event=>{
   event.preventDefault();
   const button=facebookSettings.querySelector('button');
   const field=facebookSettings.elements.facebookUrl;
+  const domain=facebookSettings.elements.domain;
   const output=facebookSettings.querySelector('output');
   if(button.disabled || !facebookSettings.reportValidity()) return;
-  button.disabled=true;field.readOnly=true;output.textContent='Zapisywanie…';
+  button.disabled=true;field.readOnly=true;domain.readOnly=true;output.textContent='Zapisywanie…';
   try {
-    const data=await adminPost('/api/admin/facebook',{url:field.value});
-    field.value=data.url;applyFacebook(data.url);output.textContent='Adres Facebooka został zapisany.';
+    const data=await adminPost('/api/admin/facebook',{url:field.value,domain:domain.value});
+    field.value=data.url;domain.value=data.domain || '';applyFacebook(data.url);output.textContent=data.domain ? 'Adresy zostały zapisane. Domena wymaga jeszcze podłączenia do hostingu.' : 'Adresy zostały zapisane.';
   } catch(error) {output.textContent=error.message;}
-  finally {button.disabled=false;field.readOnly=false;}
+  finally {button.disabled=false;field.readOnly=false;domain.readOnly=false;}
 });
 if (actionForm) {
   const photoFields = document.querySelector('#photo-fields');
