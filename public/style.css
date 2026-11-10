@@ -90,3 +90,5 @@ footer .facebook-button{margin-top:.55rem}
 
 .admin-article-buttons{display:flex;flex-wrap:wrap;gap:.6rem}.delete-article{background:#a52c35;color:#fff}.delete-article:hover{background:#80212a}
 #kontakt{align-items:start}#kontakt>div,#contact{min-width:0}#kontakt h1{font-size:clamp(2.1rem,5vw,3.7rem);letter-spacing:-.035em;overflow-wrap:anywhere}#kontakt a,#contact-result{overflow-wrap:anywhere}#contact p{margin:0;font-size:.95rem}
+
+.contact-trap{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}

@@ -6,6 +6,8 @@ const anon = () => process.env.SUPABASE_ANON_KEY;
 const service = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 const admin = () => process.env.MARZENIA_ADMIN_EMAIL?.trim().toLowerCase();
 const bucket = 'marzenia-photos';
+const settingsId='00000000-0000-4000-8000-000000000099';
+const defaultFacebook='https://www.facebook.com/profile.php?id=61567116359921';
 const sessionName = 'marzenia_session';
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const photoPath = new RegExp('^' + uuid + '\\.(jpg|png|webp)$');
@@ -70,12 +72,12 @@ function withPhotos(article) {
   return {...article, date:visibleDate(article.date), photos:article.photos.map(p=>({...p, src:localPhotos.has(p.path) ? '/'+p.path : base()+'/storage/v1/object/public/'+bucket+'/'+p.path}))};
 }
 async function allArticles() {
-  const response = await upstream('/rest/v1/marzenia_articles?select=*&order=date.desc,id&limit=1000',service());
+  const response = await upstream('/rest/v1/marzenia_articles?select=*&id=neq.'+settingsId+'&order=date.desc,id&limit=1000',service());
   if (!response.ok) throw new Error('read');
   const rows = await response.json();
   // Fetch every page, including accounts with more than 1000 articles.
   for (let offset=1000; rows.length===offset; offset+=1000) {
-    const next=await upstream('/rest/v1/marzenia_articles?select=*&order=date.desc,id&limit=1000&offset='+offset,service());
+    const next=await upstream('/rest/v1/marzenia_articles?select=*&id=neq.'+settingsId+'&order=date.desc,id&limit=1000&offset='+offset,service());
     if (!next.ok) throw new Error('read');
     const page=await next.json(); rows.push(...page); if(page.length<1000) break;
   }
@@ -93,7 +95,7 @@ async function publish(request, editing=false) {
   const article={title,body,date:storedDate(date),photos:photos.map(p=>({path:p.path,alt:p.alt.trim()}))};
   let options=post(article), query='';
   if(editing) {
-    if(!new RegExp('^'+uuid+'$').test(data.id)) return json({error:'Nieprawidłowy wpis.'},400);
+    if(data.id===settingsId || !new RegExp('^'+uuid+'$').test(data.id)) return json({error:'Nieprawidłowy wpis.'},400);
     const read=await upstream('/rest/v1/marzenia_articles?select=*&id=eq.'+data.id,service());
     if(!read.ok) throw new Error('read');
     const [current]=await read.json();
@@ -118,7 +120,7 @@ async function publish(request, editing=false) {
 }
 async function removeArticle(request) {
   const data=await request.json();
-  if(typeof data.id!=='string' || !new RegExp('^'+uuid+'$').test(data.id)) return json({error:'Nieprawidłowy wpis.'},400);
+  if(data.id===settingsId || typeof data.id!=='string' || !new RegExp('^'+uuid+'$').test(data.id)) return json({error:'Nieprawidłowy wpis.'},400);
   const read=await upstream('/rest/v1/marzenia_articles?select=*&id=eq.'+data.id,service());
   if(!read.ok) throw new Error('read');
   const [current]=await read.json();
@@ -154,6 +156,37 @@ async function removeArticle(request) {
     return json({ok:true,...(!cleared.ok ? {cleanupPending:true} : {})});
   } catch {return json({ok:true,cleanupPending:true});}
 }
+function facebookUrl(value) {
+  if(typeof value!=='string' || value.length>500) return null;
+  try {
+    const url=new URL(value.trim());
+    if(url.protocol!=='https:' || !['facebook.com','www.facebook.com','m.facebook.com'].includes(url.hostname) || url.username || url.password || url.port) return null;
+    if(url.pathname==='/profile.php') {
+      const id=url.searchParams.get('id');
+      return /^\d{5,30}$/.test(id || '') ? 'https://www.facebook.com/profile.php?id='+id : null;
+    }
+    if(!/^\/[A-Za-z0-9._-]+\/?$/.test(url.pathname) && !/^\/(people|pages)\/[^/]+\/\d+\/?$/.test(url.pathname)) return null;
+    if(/^\/(l.php|login|logout|dialog|sharer.php|plugins|checkpoint)(\/|$)/i.test(url.pathname)) return null;
+    return 'https://www.facebook.com'+url.pathname;
+  } catch {return null;}
+}
+async function readFacebook() {
+  const response=await upstream('/rest/v1/marzenia_articles?select=body&id=eq.'+settingsId,service());
+  if(!response.ok) throw new Error('settings');
+  const [row]=await response.json();
+  if(!row) return json({url:defaultFacebook});
+  const settings=JSON.parse(row.body);
+  return json({url:facebookUrl(settings.facebookUrl) || defaultFacebook});
+}
+async function saveFacebook(request) {
+  const data=await request.json();
+  const url=facebookUrl(data?.url);
+  if(!url) return json({error:'Wklej pełny adres strony Facebook, zaczynający się od https://www.facebook.com/.'},400);
+  const options=post({id:settingsId,title:'Ustawienia strony',body:JSON.stringify({facebookUrl:url}),date:storedDate(''),photos:[]});
+  options.headers.Prefer='resolution=merge-duplicates';
+  const response=await upstream('/rest/v1/marzenia_articles?on_conflict=id',service(),options);
+  return response.ok ? json({ok:true,url}) : json({error:'Nie udało się zapisać adresu. Spróbuj ponownie.'},502);
+}
 export default {async fetch(request) {
   const url = new URL(request.url);
   const route = url.searchParams.get('route');
@@ -165,6 +198,7 @@ export default {async fetch(request) {
   }
   if (!base() || !anon() || !service() || !admin()) return json({error:'Panel wymaga konfiguracji Supabase i adresu administratora.'},503);
   try {
+    if(request.method==='GET' && path==='/api/admin/facebook') return await readFacebook();
     if (request.method==='GET' && path==='/api/admin/sesja') return json({authorized:await authorized(request)});
     if(request.method==='GET' && path==='/api/admin/artykuly') {
       if(!await authorized(request)) return json({error:'Zaloguj się jako administrator.'},403);
@@ -174,6 +208,7 @@ export default {async fetch(request) {
       const match=path.match(new RegExp('^/api/dzialania/('+uuid+')$'));
       if(!match && path!=='/api/dzialania') return json(null,404);
       if(!match) return json((await allArticles()).map(a=>(a.deleted ? {id:a.id,deleted:true} : {id:a.id,date:visibleDate(a.date),builtin:Boolean(a.builtin)})));
+      if(match[1]===settingsId) return json(null,404);
       const response=await upstream('/rest/v1/marzenia_articles?select=*&id=eq.'+match[1],service());
       if(!response.ok) throw new Error('read');
       const rows=await response.json();
@@ -186,6 +221,7 @@ export default {async fetch(request) {
     if (!await authorized(request)) return json({error:'Zaloguj się jako administrator.'},403);
     if (path==='/api/admin/zdjecie') return await upload(request);
     if (path==='/api/admin/wyloguj') return json({ok:true},200,{'Set-Cookie':sessionName+'=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'});
+    if(path==='/api/admin/facebook') return await saveFacebook(request);
     if (path==='/api/admin/usun') return await removeArticle(request);
     if (path==='/api/admin/edycja') return await publish(request,true);
     if (path==='/api/dzialania') return await publish(request);

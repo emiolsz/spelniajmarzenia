@@ -33,20 +33,35 @@ function applyContactTopic() {
 applyContactTopic();
 window.addEventListener('hashchange', applyContactTopic);
 document.querySelector('#help')?.addEventListener('click', () => { topic.value = 'Szukam pomocy'; });
-document.querySelector('#contact')?.addEventListener('submit', event => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const message = form.elements.message.value.trim();
-  const output = document.querySelector('#contact-result');
-  if (!message) {output.textContent='Wpisz treść wiadomości.'; form.elements.message.focus(); return;}
-  const address='stowarzyszeniemarzenia@gmail.com';
-  const subject='Stowarzyszenie Marzenia — '+topic.value;
-  const body=message+'\r\n\r\nE-mail do odpowiedzi: '+form.elements.email.value.trim();
-  const href='mailto:'+address+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
-  const link=document.createElement('a');link.href=href;link.textContent='Otwórz wiadomość w programie pocztowym';
-  output.replaceChildren(document.createTextNode('Wiadomość nie została jeszcze wysłana. Wyślij ją w programie pocztowym. Jeśli nie otworzył się automatycznie, '),link,document.createTextNode(' lub napisz bezpośrednio na '+address+'.'));
-  link.click();
-});
+const contactForm=document.querySelector('#contact');
+if(contactForm) {
+  const button=contactForm.querySelector('button[type="submit"]');
+  const output=document.querySelector('#contact-result');
+  output.textContent='Sprawdzanie dostępności formularza…';
+  fetch('/api/kontakt').then(async response=>{
+    if(!response.ok) throw new Error();
+    const status=await response.json();
+    if(!status.available) throw new Error();
+    button.disabled=false;output.textContent='';
+  }).catch(()=>{output.textContent='Formularz chwilowo niedostępny. Napisz bezpośrednio na stowarzyszeniemarzenia@gmail.com.';});
+  contactForm.addEventListener('submit',async event=>{
+    event.preventDefault();
+    if(button.disabled) return;
+    if(!contactForm.reportValidity()) return;
+    const fields=[...contactForm.querySelectorAll('input,select,textarea')];
+    const data={topic:topic.value,email:contactForm.elements.email.value,message:contactForm.elements.message.value,website:contactForm.elements.website.value};
+    button.disabled=true; fields.forEach(field=>{field.disabled=true;});
+    output.textContent='Wysyłanie wiadomości…';
+    try {
+      const response=await fetch('/api/kontakt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+      const result=await response.json();
+      if(!response.ok || !result.ok) throw new Error(result.error || 'Nie udało się potwierdzić wysłania wiadomości.');
+      contactForm.elements.message.value='';
+      output.textContent='Twoja wiadomość została wysłana. Dziękujemy za kontakt.';
+    } catch(error) {output.textContent=error.message || 'Nie udało się potwierdzić wysłania wiadomości. Spróbuj ponownie później.';}
+    finally {button.disabled=false;fields.forEach(field=>{field.disabled=false;});}
+  });
+}
 
 document.querySelector('#business-form')?.addEventListener('submit', event => {
   event.preventDefault();
@@ -84,6 +99,7 @@ function showSession(authorized) {
   adminLogin.hidden = authorized;
   actionForm.hidden = !authorized;
   logout.hidden = !authorized;
+  document.querySelector("#facebook-settings").hidden = !authorized;
   document.querySelector("#article-manager").hidden = !authorized;
   if (authorized) document.dispatchEvent(new Event("admin-ready"));
   else document.querySelector("#article-list").replaceChildren();
@@ -114,6 +130,37 @@ if (adminLogin) {
     catch(e) {document.querySelector('#admin-result').textContent=e.message;}
   });
 }
+const facebookSettings=document.querySelector('#facebook-settings');
+function applyFacebook(url) {
+  let parsed;
+  try {parsed=new URL(url);} catch {return;}
+  if(parsed.protocol!=='https:' || parsed.hostname!=='www.facebook.com') return;
+  document.querySelectorAll('.facebook-button').forEach(link=>{link.href=url;});
+}
+fetch('/api/admin/facebook').then(async response=>{
+  if(!response.ok) throw new Error();
+  const data=await response.json();
+  applyFacebook(data.url);
+  if(facebookSettings) {
+    facebookSettings.elements.facebookUrl.value=data.url;
+    facebookSettings.querySelector('button').disabled=false;
+  }
+}).catch(()=>{
+  if(facebookSettings) facebookSettings.querySelector('output').textContent='Nie udało się odczytać adresu Facebooka. Odśwież stronę, aby spróbować ponownie.';
+});
+facebookSettings?.addEventListener('submit',async event=>{
+  event.preventDefault();
+  const button=facebookSettings.querySelector('button');
+  const field=facebookSettings.elements.facebookUrl;
+  const output=facebookSettings.querySelector('output');
+  if(button.disabled || !facebookSettings.reportValidity()) return;
+  button.disabled=true;field.readOnly=true;output.textContent='Zapisywanie…';
+  try {
+    const data=await adminPost('/api/admin/facebook',{url:field.value});
+    field.value=data.url;applyFacebook(data.url);output.textContent='Adres Facebooka został zapisany.';
+  } catch(error) {output.textContent=error.message;}
+  finally {button.disabled=false;field.readOnly=false;}
+});
 if (actionForm) {
   const photoFields = document.querySelector('#photo-fields');
   const photoList = document.querySelector('#photo-list');

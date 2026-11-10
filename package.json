@@ -1,1 +1,1 @@
-{"private":true,"type":"module"}
+{"private":true,"type":"module","dependencies":{"nodemailer":"10.5.0"}}

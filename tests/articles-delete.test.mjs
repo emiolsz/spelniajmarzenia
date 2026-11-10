@@ -8,7 +8,7 @@ global.fetch=async(url,options={})=>{
  if(u.pathname==='/auth/v1/user') return Response.json({email:'admin@test.pl',email_confirmed_at:'2026-01-01'});
  if(u.pathname.startsWith('/storage/')) {deletes.push(JSON.parse(options.body).prefixes);return Response.json({}, {status:failStorage?500:200});}
  if(u.pathname.startsWith('/rest/')) {
-  const current=u.searchParams.get('id')?rows.filter(a=>a.id===u.searchParams.get('id').slice(3)):rows;
+  const current=u.searchParams.get('id')?rows.filter(a=>u.searchParams.get('id').startsWith('neq.') ? a.id!==u.searchParams.get('id').slice(4) : a.id===u.searchParams.get('id').slice(3)):rows;
   if(options.method==='PATCH'){writes++; const data=JSON.parse(options.body);current.forEach(a=>Object.assign(a,data));return Response.json(current);}
   if(options.method==='POST'){writes++;const data=JSON.parse(options.body);rows.push(data);return Response.json([data],{status:201});}
   return Response.json(current);

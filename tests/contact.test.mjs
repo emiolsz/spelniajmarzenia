@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {createHandler} from '../api/kontakt.js';
+let messages=[];const handle=createHandler(async message=>{messages.push(message);});
+const request=(data,origin='https://site.test')=>new Request('https://site.test/api/kontakt',{method:'POST',headers:{origin,'content-type':'application/json','x-vercel-forwarded-for':'192.0.2.1'},body:JSON.stringify(data)});
+delete process.env.BREVO_SMTP_KEY;
+assert.equal((await handle(new Request('https://site.test/api/kontakt'))).status,200);
+assert.equal((await handle(request({}))).status,503);assert.equal(messages.length,0);
+process.env.BREVO_SMTP_KEY='test-only-not-real';
+const data={email:'user@interia.pl',topic:'Szukam pomocy',message:'Potrzebuję wsparcia.'};
+assert.equal((await handle(request(data,'https://evil.test'))).status,403);
+assert.equal((await handle(request({...data,email:'a@test.pl\r\nBcc: b@test.pl'}))).status,400);
+assert.equal((await handle(request({...data,website:'spam'}))).status,400);
+assert.equal((await handle(request({...data,topic:'Injected topic'}))).status,400);
+assert.equal((await handle(request(data))).status,200);assert.deepEqual(messages,[data]);
+const fail=createHandler(async()=>{throw Error('SMTP failure');});assert.equal((await fail(request({...data,email:'user@gmail.com'}))).status,502);
+console.log('PASS contact: missing configuration never succeeds, origin/email/topic/spam validation, direct send, SMTP failure reported');
