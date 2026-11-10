@@ -94,31 +94,195 @@ if (adminLogin) {
     catch(e) {document.querySelector('#admin-result').textContent=e.message;}
   });
 }
-actionForm?.addEventListener('submit', async event => {
-  event.preventDefault();
+if (actionForm) {
+  const photoFields = document.querySelector('#photo-fields');
+  const photoList = document.querySelector('#photo-list');
+  const addPhoto = document.querySelector('#add-photo');
+  const preview = document.querySelector('#action-preview');
+  const previewContent = document.querySelector('#action-preview-content');
   const output = document.querySelector('#admin-result');
-  const button = actionForm.querySelector('button');
-  const form = new FormData(actionForm);
-  const files = form.getAll('photos').filter(file=>file.size);
-  const captions = String(form.get('captions') || '').trim().split(/\r?\n/).map(line=>line.trim());
-  if (files.length>10 || files.some(file=>file.size>2097152) || (files.length && (captions.length!==files.length || captions.some(line=>!line || line.length>250)))) {
-    output.textContent='Dodaj do 10 zdjęć po maksymalnie 2 MB i po jednym krótkim opisie każdego zdjęcia.';
-    return;
+  const publish = actionForm.querySelector('button[type="submit"]');
+  const photos = [];
+
+  function renderPreview() {
+    if (!preview.open) return;
+    const galleryOpen = previewContent.querySelector('details')?.open;
+    const article = renderAction({
+      title: actionForm.elements.title.value.trim() || 'Tytuł artykułu',
+      date: actionForm.elements.date.validity.valid ? actionForm.elements.date.value : '',
+      body: actionForm.elements.body.value || 'Opis zdarzenia',
+      photos: photos.filter(photo => photo.src).map(photo => ({src: photo.src, alt: photo.caption.value}))
+    });
+    const gallery = article.querySelector('details');
+    if (gallery && galleryOpen) gallery.open = true;
+    previewContent.replaceChildren(article);
   }
-  button.disabled = true;
-  try {
-    const photos=[];
-    for (const [index,file] of files.entries()) {
-      output.textContent='Przesyłanie zdjęcia '+(index+1)+' z '+files.length+'…';
-      const uploaded=await adminRequest('/api/admin/zdjecie',{method:'POST',headers:{'Content-Type':file.type},body:file});
-      photos.push({path:uploaded.path,alt:captions[index]});
+
+  function updatePhotos() {
+    photos.forEach((photo, index) => {
+      const position = index + 1;
+      photo.title.textContent = 'Zdjęcie ' + position + (position === 1 ? ' – główne' : '');
+      photo.file.setAttribute('aria-label', 'Wybierz plik zdjęcia ' + position);
+      photo.caption.setAttribute('aria-label', 'Opis zdjęcia ' + position + ' dla czytników ekranu');
+      photo.cover.hidden = index === 0 || !photo.src || !photos[0].src;
+    });
+    addPhoto.disabled = photos.length >= 10 || photos.some(photo => !photo.src);
+    renderPreview();
+  }
+
+  function addPhotoRow() {
+    const row = document.querySelector('#photo-template').content.firstElementChild.cloneNode(true);
+    const photo = {
+      row,
+      title: row.querySelector('h3'),
+      file: row.querySelector('input[type="file"]'),
+      caption: row.querySelector('input[type="text"]'),
+      thumbnail: row.querySelector('img'),
+      cover: row.querySelector('[data-cover]'),
+      src: '',
+      uploadedPath: ''
+    };
+    photos.push(photo);
+    photoList.append(row);
+    photo.file.addEventListener('change', () => {
+      if (photo.src) URL.revokeObjectURL(photo.src);
+      const file = photo.file.files[0];
+      photo.src = file ? URL.createObjectURL(file) : '';
+      photo.uploadedPath = '';
+      photo.thumbnail.hidden = !file;
+      if (file) photo.thumbnail.src = photo.src;
+      else photo.thumbnail.removeAttribute('src');
+      photo.caption.required = Boolean(file);
+      photo.file.setCustomValidity(file?.size > 2097152 ? 'To zdjęcie przekracza 2 MB.' :
+        file && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) ? 'Wybierz zdjęcie JPG, PNG lub WebP.' : '');
+      updatePhotos();
+      photo.file.reportValidity();
+    });
+    photo.cover.addEventListener('click', () => {
+      photos.splice(photos.indexOf(photo), 1);
+      photos.unshift(photo);
+      photoList.prepend(row);
+      updatePhotos();
+      photo.file.focus();
+    });
+    row.querySelector('[data-remove]').addEventListener('click', () => {
+      if (photo.src) URL.revokeObjectURL(photo.src);
+      photos.splice(photos.indexOf(photo), 1);
+      row.remove();
+      if (photos.length === 0) addPhotoRow().focus();
+      else {
+        updatePhotos();
+        photos[photos.length - 1].file.focus();
+      }
+    });
+    updatePhotos();
+    return photo.file;
+  }
+
+  addPhotoRow();
+  addPhoto.addEventListener('click', () => addPhotoRow().focus());
+  preview.addEventListener('toggle', renderPreview);
+  actionForm.addEventListener('input', renderPreview);
+
+  actionForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = new FormData(actionForm);
+    const selected = photos.filter(photo => photo.file.files.length).map((photo, index) => ({
+      photo, file: photo.file.files[0], alt: photo.caption.value.trim(), position: index + 1
+    }));
+    const missing = selected.find(photo => !photo.alt);
+    if (missing) {
+      output.textContent = 'Wpisz krótki opis zdjęcia ' + missing.position + '.';
+      missing.photo.caption.focus();
+      return;
     }
-    await adminPost('/api/dzialania',{title:form.get('title'),date:form.get('date'),body:form.get('body'),photos});
-    actionForm.reset();
-    output.textContent='Działanie zostało opublikowane.';
-  } catch (error) {output.textContent=error.message;}
-  finally {button.disabled=false;}
-});
+    publish.disabled = true;
+    photoFields.disabled = true;
+    const textFields = [actionForm.elements.title, actionForm.elements.date, actionForm.elements.body];
+    textFields.forEach(field => { field.readOnly = true; });
+    try {
+      const uploadedPhotos = [];
+      for (const {photo, file, alt, position} of selected) {
+        output.textContent = 'Przesyłanie zdjęcia ' + position + ' z ' + selected.length + '…';
+        if (!photo.uploadedPath) {
+          const uploaded = await adminRequest('/api/admin/zdjecie', {method: 'POST', headers: {'Content-Type': file.type}, body: file});
+          photo.uploadedPath = uploaded.path;
+        }
+        uploadedPhotos.push({path: photo.uploadedPath, alt});
+      }
+      output.textContent = 'Zapisywanie działania…';
+      await adminPost('/api/dzialania', {title: form.get('title'), date: form.get('date'), body: form.get('body'), photos: uploadedPhotos});
+      actionForm.reset();
+      photos.splice(0).forEach(photo => { if (photo.src) URL.revokeObjectURL(photo.src); });
+      photoList.replaceChildren();
+      addPhotoRow();
+      output.textContent = 'Działanie zostało opublikowane.';
+    } catch (error) {
+      output.textContent = error.message;
+    } finally {
+      publish.disabled = false;
+      photoFields.disabled = false;
+      textFields.forEach(field => { field.readOnly = false; });
+    }
+  });
+}
+
+function renderAction(data, url) {
+  const article = document.createElement('article');
+  article.className = 'news-article';
+  article.dataset.date = data.date;
+  const row = document.createElement('div');
+  row.className = data.photos.length ? 'news-row' : 'news-row no-photo';
+  const copy = document.createElement('div');
+  const time = document.createElement('time');
+  time.dateTime = data.date;
+  time.textContent = data.date ? new Intl.DateTimeFormat('pl', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(data.date)) : '';
+  const title = document.createElement('h2');
+  title.textContent = data.title;
+  const intro = document.createElement('p');
+  const text = data.body.trim();
+  let cut = text.length;
+  if (cut > 220) {
+    cut = text.lastIndexOf(' ', 220);
+    if (cut < 100) cut = 220;
+  }
+  intro.textContent = text.slice(0, cut) + (cut < text.length ? '…' : '');
+  copy.append(time, title, intro);
+  function photoAt(photo, index) {
+    const link = document.createElement('a');
+    const src = photo.src || url + '/' + index;
+    if (url) link.href = src;
+    const image = document.createElement('img');
+    image.src = src;
+    image.alt = photo.alt;
+    image.loading = 'lazy';
+    link.append(image);
+    return link;
+  }
+  if (data.photos.length) row.append(photoAt(data.photos[0], 0));
+  if (cut < text.length || data.photos.length > 1) {
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Czytaj więcej';
+    details.append(summary);
+    if (cut < text.length) {
+      const body = document.createElement('p');
+      body.className = 'action-body';
+      body.textContent = text;
+      details.append(body);
+    }
+    if (data.photos.length > 1) {
+      const gallery = document.createElement('div');
+      gallery.className = 'action-photos';
+      data.photos.slice(1).forEach((photo, index) => gallery.append(photoAt(photo, index + 1)));
+      details.append(gallery);
+    }
+    copy.append(details);
+  }
+  row.append(copy);
+  article.append(row);
+  return article;
+}
 
 async function loadActions() {
   const status = document.querySelector('#actions-status');
@@ -134,58 +298,7 @@ async function loadActions() {
       const response = await fetch(url);
       if (!response.ok) throw new Error();
       const data = await response.json();
-      const article = document.createElement('article');
-      article.className = 'news-article';
-      article.dataset.date = data.date;
-      const row = document.createElement('div');
-      row.className = data.photos.length ? 'news-row' : 'news-row no-photo';
-      const copy = document.createElement('div');
-      const time = document.createElement('time');
-      time.dateTime = data.date;
-      time.textContent = new Intl.DateTimeFormat('pl', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(data.date));
-      const title = document.createElement('h2');
-      title.textContent = data.title;
-      const intro = document.createElement('p');
-      const text = data.body.trim();
-      let cut = text.length;
-      if (cut > 220) {
-        cut = text.lastIndexOf(' ', 220);
-        if (cut < 100) cut = 220;
-      }
-      intro.textContent = text.slice(0, cut) + (cut < text.length ? '…' : '');
-      copy.append(time, title, intro);
-      function photoAt(photo, index) {
-        const link = document.createElement('a');
-        link.href = photo.src || url + '/' + index;
-        const image = document.createElement('img');
-        image.src = link.href;
-        image.alt = photo.alt;
-        image.loading = 'lazy';
-        link.append(image);
-        return link;
-      }
-      if (data.photos.length) row.append(photoAt(data.photos[0], 0));
-      if (cut < text.length || data.photos.length > 1) {
-        const details = document.createElement('details');
-        const summary = document.createElement('summary');
-        summary.textContent = 'Czytaj więcej';
-        details.append(summary);
-        if (cut < text.length) {
-          const body = document.createElement('p');
-          body.className = 'action-body';
-          body.textContent = text;
-          details.append(body);
-        }
-        if (data.photos.length > 1) {
-          const gallery = document.createElement('div');
-          gallery.className = 'action-photos';
-          data.photos.slice(1).forEach((photo, index) => gallery.append(photoAt(photo, index + 1)));
-          details.append(gallery);
-        }
-        copy.append(details);
-      }
-      row.append(copy);
-      article.append(row);
+      const article = renderAction(data, url);
       dated.push(article);
     }
     dated.sort((a, b) => b.dataset.date.localeCompare(a.dataset.date));

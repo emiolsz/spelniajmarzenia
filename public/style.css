@@ -76,3 +76,12 @@ footer .facebook-button{background:#fff;color:#245782;text-decoration:none}
 footer .facebook-button{margin-top:.55rem}
 
 [hidden]{display:none!important}
+
+#photo-fields{min-inline-size:0;margin:0;padding:0;border:0}
+#photo-fields legend{font-weight:750}
+.admin-photo{padding:1rem;margin-block:0 1rem;border:1px solid #d8e4ed;border-radius:12px}
+.admin-photo h3{margin:0 0 .75rem}
+.admin-photo img{display:block;max-width:100%;max-height:12rem;margin-bottom:.75rem;border-radius:8px}
+.admin-photo-buttons{display:flex;flex-wrap:wrap;gap:.75rem}
+#action-preview{margin-block:1.25rem}
+#action-preview summary{cursor:pointer;font-weight:750;color:var(--accent)}
