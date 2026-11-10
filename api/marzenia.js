@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+import builtinActions from '../lib/builtin-actions.js';
+import { randomUUID, createHash } from 'node:crypto';
 
 const base = () => process.env.SUPABASE_URL?.replace(/\/$/, '');
 const anon = () => process.env.SUPABASE_ANON_KEY;
@@ -57,15 +58,60 @@ async function upload(request) {
   if (!response.ok) return json({error:'Nie udało się zapisać zdjęcia.'},502);
   return json({path},201);
 }
-async function publish(request) {
+const localPhotos = new Set(builtinActions.flatMap(a => a.photos.map(p => p.path)));
+const storedDate = date => date || '0001-01-01';
+const visibleDate = date => date === '0001-01-01' ? '' : date;
+function revision(article) {
+  return createHash('sha256').update(JSON.stringify([article.title, article.date, article.body, article.photos])).digest('hex');
+}
+function withPhotos(article) {
+  return {...article, date:visibleDate(article.date), photos:article.photos.map(p=>({...p, src:localPhotos.has(p.path) ? '/'+p.path : base()+'/storage/v1/object/public/'+bucket+'/'+p.path}))};
+}
+async function allArticles() {
+  const response = await upstream('/rest/v1/marzenia_articles?select=*&order=date.desc,id&limit=1000',service());
+  if (!response.ok) throw new Error('read');
+  const rows = await response.json();
+  // Fetch every page, including accounts with more than 1000 articles.
+  for (let offset=1000; rows.length===offset; offset+=1000) {
+    const next=await upstream('/rest/v1/marzenia_articles?select=*&order=date.desc,id&limit=1000&offset='+offset,service());
+    if (!next.ok) throw new Error('read');
+    const page=await next.json(); rows.push(...page); if(page.length<1000) break;
+  }
+  const ids = new Set(rows.map(a=>a.id));
+  return [...rows.map(a=>({...a,revision:revision(a)})), ...builtinActions.filter(a=>!ids.has(a.id)).map(a=>({...a,builtin:true,revision:'builtin'}))]
+    .sort((a,b)=>visibleDate(b.date).localeCompare(visibleDate(a.date)) || a.id.localeCompare(b.id));
+}
+async function publish(request, editing=false) {
   const data = await request.json();
   const title = String(data.title || '').trim(), body = String(data.body || '').trim(), date = String(data.date || '');
   const parsed = new Date(date);
   const photos = data.photos;
-  if (!title || title.length>160 || !body || body.length>12000 || !/^\d{4}-\d{2}-\d{2}$/.test(date) || date<'1900-01-01' || !Number.isFinite(+parsed) || parsed.toISOString().slice(0,10)!==date ||
-      !Array.isArray(photos) || photos.length>10 || photos.some(p=>!p || !photoPath.test(p.path) || typeof p.alt!=='string' || !p.alt.trim() || p.alt.length>250)) return json({error:'Sprawdź tytuł, datę, opis i podpisy zdjęć.'},400);
-  const result = await upstream('/rest/v1/marzenia_articles',service(),post({title,body,date,photos}));
-  return result.ok ? json({ok:true},201) : json({error:'Nie udało się zapisać artykułu.'},502);
+  if (!title || title.length>160 || !body || body.length>12000 || (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date<'1900-01-01' || !Number.isFinite(+parsed) || parsed.toISOString().slice(0,10)!==date)) ||
+      !Array.isArray(photos) || photos.length>10 || photos.some(p=>!p || !(photoPath.test(p.path) || localPhotos.has(p.path)) || typeof p.alt!=='string' || !p.alt.trim() || p.alt.length>250)) return json({error:'Sprawdź tytuł, datę, opis i podpisy zdjęć.'},400);
+  const article={title,body,date:storedDate(date),photos:photos.map(p=>({path:p.path,alt:p.alt.trim()}))};
+  let options=post(article), query='';
+  if(editing) {
+    if(!new RegExp('^'+uuid+'$').test(data.id)) return json({error:'Nieprawidłowy wpis.'},400);
+    const read=await upstream('/rest/v1/marzenia_articles?select=*&id=eq.'+data.id,service());
+    if(!read.ok) throw new Error('read');
+    const [current]=await read.json();
+    if(current) {
+      if(data.revision!==revision(current)) return json({error:'Ten wpis został już zmieniony. Otwórz go ponownie z listy.'},409);
+      const filters=new URLSearchParams({id:'eq.'+data.id,select:'id',title:'eq.'+current.title,body:'eq.'+current.body,date:'eq.'+current.date,photos:'eq.'+JSON.stringify(current.photos)});
+      query='?'+filters;
+      options={...post(article),method:'PATCH'};
+    } else {
+      if(data.revision!=='builtin' || !builtinActions.some(a=>a.id===data.id)) return json({error:'Nie znaleziono wpisu. Odśwież listę.'},404);
+      options=post({...article,id:data.id});
+    }
+  }
+  options.headers.Prefer='return=representation';
+  const result = await upstream('/rest/v1/marzenia_articles'+query,service(),options);
+  if(result.status===409) return json({error:'Ten wpis został już zmieniony. Otwórz go ponownie z listy.'},409);
+  if(!result.ok) return json({error:'Nie udało się zapisać artykułu. Zachowaliśmy formularz; spróbuj ponownie.'},502);
+  const saved=await result.json();
+  if(!saved.length) return json({error:'Ten wpis został już zmieniony. Otwórz go ponownie z listy.'},409);
+  return json({ok:true},editing?200:201);
 }
 export default {async fetch(request) {
   const url = new URL(request.url);
@@ -79,17 +125,19 @@ export default {async fetch(request) {
   if (!base() || !anon() || !service() || !admin()) return json({error:'Panel wymaga konfiguracji Supabase i adresu administratora.'},503);
   try {
     if (request.method==='GET' && path==='/api/admin/sesja') return json({authorized:await authorized(request)});
+    if(request.method==='GET' && path==='/api/admin/artykuly') {
+      if(!await authorized(request)) return json({error:'Zaloguj się jako administrator.'},403);
+      return json((await allArticles()).map(withPhotos));
+    }
     if (request.method==='GET' && path.startsWith('/api/dzialania')) {
-      const match = path.match(new RegExp('^/api/dzialania/('+uuid+')$'));
-      if (!match && path!=='/api/dzialania') return json(null,404);
-      const query = match ? '?select=*&id=eq.'+match[1] : '?select=id,date&order=date.desc';
-      const response = await upstream('/rest/v1/marzenia_articles'+query,service());
-      if (!response.ok) return json({error:'Nie udało się odczytać wpisów.'},502);
-      const rows = await response.json();
-      if (!match) return json(rows);
-      if (!rows.length) return json(null,404);
-      const article = rows[0];
-      return json({...article, photos:article.photos.map(p=>({alt:p.alt,src:base()+'/storage/v1/object/public/'+bucket+'/'+p.path}))});
+      const match=path.match(new RegExp('^/api/dzialania/('+uuid+')$'));
+      if(!match && path!=='/api/dzialania') return json(null,404);
+      if(!match) return json((await allArticles()).map(a=>({id:a.id,date:visibleDate(a.date),builtin:Boolean(a.builtin)})));
+      const response=await upstream('/rest/v1/marzenia_articles?select=*&id=eq.'+match[1],service());
+      if(!response.ok) throw new Error('read');
+      const rows=await response.json();
+      const article=rows[0] || builtinActions.find(a=>a.id===match[1]);
+      return article ? json(withPhotos(article)) : json(null,404);
     }
     if (request.method!=='POST') return json(null,405);
     if (request.headers.get('origin')!==url.origin) return json({error:'Nieprawidłowe źródło żądania.'},403);
@@ -97,6 +145,7 @@ export default {async fetch(request) {
     if (!await authorized(request)) return json({error:'Zaloguj się jako administrator.'},403);
     if (path==='/api/admin/zdjecie') return await upload(request);
     if (path==='/api/admin/wyloguj') return json({ok:true},200,{'Set-Cookie':sessionName+'=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'});
+    if (path==='/api/admin/edycja') return await publish(request,true);
     if (path==='/api/dzialania') return await publish(request);
     return json(null,404);
   } catch {

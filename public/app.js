@@ -67,6 +67,9 @@ function showSession(authorized) {
   adminLogin.hidden = authorized;
   actionForm.hidden = !authorized;
   logout.hidden = !authorized;
+  document.querySelector("#article-manager").hidden = !authorized;
+  if (authorized) document.dispatchEvent(new Event("admin-ready"));
+  else document.querySelector("#article-list").replaceChildren();
 }
 if (adminLogin) {
   const output = document.querySelector('#login-result');
@@ -103,6 +106,52 @@ if (actionForm) {
   const output = document.querySelector('#admin-result');
   const publish = actionForm.querySelector('button[type="submit"]');
   const photos = [];
+  let editing = null, busy = false, baseline = '';
+  const manager = document.querySelector('#article-manager');
+  const listStatus = document.querySelector('#article-list-status');
+  const list = document.querySelector('#article-list');
+  const cancel = document.querySelector('#cancel-edit');
+  const state = () => JSON.stringify([actionForm.elements.title.value, actionForm.elements.date.value, actionForm.elements.body.value, photos.filter(p=>p.src).map(p=>[p.src,p.caption.value])]);
+  const canLeave = () => !busy && (state() === baseline || confirm('Masz niezapisane zmiany. Odrzucić je?'));
+  function openEditor(article = null) {
+    editing = article;
+    actionForm.reset();
+    photos.splice(0).forEach(p=>{if(p.src.startsWith('blob:')) URL.revokeObjectURL(p.src);});
+    photoList.replaceChildren();
+    for(const field of ['title','date','body']) actionForm.elements[field].value = article?.[field] || '';
+    if(article?.photos.length) article.photos.forEach(photo=>addPhotoRow(photo));
+    else addPhotoRow();
+    document.querySelector('#editor-title').textContent=article ? 'Edytuj artykuł: '+article.title : 'Nowy artykuł';
+    publish.textContent=article ? 'Zapisz zmiany' : 'Opublikuj działanie';
+    cancel.hidden=!article;
+    output.textContent='';
+    baseline=state();
+    renderPreview();
+  }
+  async function refreshArticles() {
+    listStatus.textContent='Wczytywanie artykułów…';
+    try {
+      const articles=await adminRequest('/api/admin/artykuly');
+      list.replaceChildren();
+      for(const article of articles) {
+        const row=document.createElement('div'); row.className='admin-article-row';
+        const info=document.createElement('div');
+        const title=document.createElement('strong'); title.textContent=article.title;
+        const meta=document.createElement('p'); meta.textContent=(article.date || 'Bez pełnej daty')+' · Zdjęcia: '+article.photos.length;
+        info.append(title,meta);
+        const edit=document.createElement('button'); edit.type='button'; edit.className='btn'; edit.textContent='Edytuj';
+        edit.addEventListener('click',()=>{if(canLeave()){openEditor(article); actionForm.scrollIntoView({behavior:'smooth',block:'start'}); actionForm.elements.title.focus({preventScroll:true});}});
+        row.append(info,edit); list.append(row);
+      }
+      listStatus.textContent='Liczba artykułów: '+articles.length;
+    } catch(error) {listStatus.textContent=error.message;}
+  }
+  document.addEventListener('admin-ready',refreshArticles);
+  document.querySelector('#refresh-articles').addEventListener('click',()=>{if(!busy) refreshArticles();});
+  document.querySelector('#new-article').addEventListener('click',()=>{if(canLeave()){openEditor();actionForm.scrollIntoView({behavior:'smooth'});}});
+  cancel.addEventListener('click',()=>{if(canLeave()) openEditor();});
+  window.addEventListener('beforeunload',event=>{if(state()!==baseline){event.preventDefault();event.returnValue='';}});
+
 
   function renderPreview() {
     if (!preview.open) return;
@@ -130,7 +179,7 @@ if (actionForm) {
     renderPreview();
   }
 
-  function addPhotoRow() {
+  function addPhotoRow(existing = null) {
     const row = document.querySelector('#photo-template').content.firstElementChild.cloneNode(true);
     const photo = {
       row,
@@ -139,13 +188,19 @@ if (actionForm) {
       caption: row.querySelector('input[type="text"]'),
       thumbnail: row.querySelector('img'),
       cover: row.querySelector('[data-cover]'),
-      src: '',
-      uploadedPath: ''
+      src: existing?.src || '',
+      uploadedPath: existing?.path || ''
     };
+    if(existing) {
+      photo.thumbnail.src=existing.src;
+      photo.thumbnail.hidden=false;
+      photo.caption.value=existing.alt;
+      photo.caption.required=true;
+    }
     photos.push(photo);
     photoList.append(row);
     photo.file.addEventListener('change', () => {
-      if (photo.src) URL.revokeObjectURL(photo.src);
+      if (photo.src.startsWith('blob:')) URL.revokeObjectURL(photo.src);
       const file = photo.file.files[0];
       photo.src = file ? URL.createObjectURL(file) : '';
       photo.uploadedPath = '';
@@ -166,7 +221,7 @@ if (actionForm) {
       photo.file.focus();
     });
     row.querySelector('[data-remove]').addEventListener('click', () => {
-      if (photo.src) URL.revokeObjectURL(photo.src);
+      if (photo.src.startsWith('blob:')) URL.revokeObjectURL(photo.src);
       photos.splice(photos.indexOf(photo), 1);
       row.remove();
       if (photos.length === 0) addPhotoRow().focus();
@@ -179,7 +234,7 @@ if (actionForm) {
     return photo.file;
   }
 
-  addPhotoRow();
+  openEditor();
   addPhoto.addEventListener('click', () => addPhotoRow().focus());
   preview.addEventListener('toggle', renderPreview);
   actionForm.addEventListener('input', renderPreview);
@@ -187,7 +242,7 @@ if (actionForm) {
   actionForm.addEventListener('submit', async event => {
     event.preventDefault();
     const form = new FormData(actionForm);
-    const selected = photos.filter(photo => photo.file.files.length).map((photo, index) => ({
+    const selected = photos.filter(photo => photo.src).map((photo, index) => ({
       photo, file: photo.file.files[0], alt: photo.caption.value.trim(), position: index + 1
     }));
     const missing = selected.find(photo => !photo.alt);
@@ -196,6 +251,9 @@ if (actionForm) {
       missing.photo.caption.focus();
       return;
     }
+    busy = true;
+    manager.inert = true;
+    cancel.disabled = true;
     publish.disabled = true;
     photoFields.disabled = true;
     const textFields = [actionForm.elements.title, actionForm.elements.date, actionForm.elements.body];
@@ -211,15 +269,17 @@ if (actionForm) {
         uploadedPhotos.push({path: photo.uploadedPath, alt});
       }
       output.textContent = 'Zapisywanie działania…';
-      await adminPost('/api/dzialania', {title: form.get('title'), date: form.get('date'), body: form.get('body'), photos: uploadedPhotos});
-      actionForm.reset();
-      photos.splice(0).forEach(photo => { if (photo.src) URL.revokeObjectURL(photo.src); });
-      photoList.replaceChildren();
-      addPhotoRow();
-      output.textContent = 'Działanie zostało opublikowane.';
+      const wasEditing = Boolean(editing);
+      await adminPost(editing ? '/api/admin/edycja' : '/api/dzialania', {id:editing?.id, revision:editing?.revision, title: form.get('title'), date: form.get('date'), body: form.get('body'), photos: uploadedPhotos});
+      openEditor();
+      output.textContent = wasEditing ? 'Zmiany zostały zapisane. Zobacz wpis na stronie Nasze działania.' : 'Działanie zostało opublikowane.';
+      await refreshArticles();
     } catch (error) {
       output.textContent = error.message;
     } finally {
+      busy = false;
+      manager.inert = false;
+      cancel.disabled = false;
       publish.disabled = false;
       photoFields.disabled = false;
       textFields.forEach(field => { field.readOnly = false; });
@@ -293,13 +353,21 @@ async function loadActions() {
     const entries = await list.json();
     if (!entries.length) return;
     const dated = [...document.querySelectorAll('[data-date]')];
-    for (const entry of entries) {
-      const url = '/api/dzialania/' + entry.id;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error();
-      const data = await response.json();
+    const updates=await Promise.all(entries.filter(entry=>!entry.builtin).map(async entry=>{
+      const url='/api/dzialania/'+entry.id;
+      const response=await fetch(url);
+      if(!response.ok) throw new Error();
+      return {entry,url,data:await response.json()};
+    }));
+    for (const {entry,url,data} of updates) {
       const article = renderAction(data, url);
-      dated.push(article);
+      const original=document.querySelector('[data-article-id="'+entry.id+'"]');
+      const oldIndex=dated.indexOf(original);
+      if(oldIndex!==-1) dated.splice(oldIndex,1);
+      original?.remove();
+      article.dataset.articleId=entry.id;
+      if(data.date) dated.push(article);
+      else document.querySelector('#undated-actions').after(article);
     }
     dated.sort((a, b) => b.dataset.date.localeCompare(a.dataset.date));
     for (const article of dated) {
